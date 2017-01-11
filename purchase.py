@@ -1,9 +1,9 @@
 # This file is part of Tryton.  The COPYRIGHT file at the top level of
 # this repository contains the full copyright notices and license terms.
 from trytond.pool import PoolMeta
-from trytond.model import fields
-from trytond.pyson import Eval
 from decimal import Decimal
+from trytond.transaction import Transaction
+from trytond.pool import Pool
 
 __all__ = ['PurchaseLine', 'ProjectSummary', 'Work']
 
@@ -13,10 +13,9 @@ class Work:
     __metaclass__ = PoolMeta
 
     @classmethod
-    def _get_related_cost_and_revenue(cls):
-        res = super(Work, cls)._get_related_cost_and_revenue()
-        return res + [('purchase.line', 'work', '_get_revenue',
-            '_get_cost')]
+    def _get_summary_models(cls):
+        res = super(Work, cls)._get_summary_models()
+        return res + [('purchase.line', 'work', 'get_total')]
 
 
 class ProjectSummary:
@@ -36,7 +35,9 @@ class PurchaseLine:
 
     @classmethod
     def _get_cost(cls, purchase_lines):
-        return dict((w.id, w.amount) for w in purchase_lines)
+        limit_date = Transaction().context.get('limit_date')
+        return dict((w.id, w.amount) for w in purchase_lines
+            if (limit_date == None or w.purchase.purchase_date <= limit_date))
 
     @classmethod
     def _get_revenue(cls, purchase_lines):
@@ -45,3 +46,29 @@ class PurchaseLine:
     @staticmethod
     def _get_summary_related_field():
         return 'work'
+
+    @classmethod
+    def get_total(cls, lines, names):
+        res = {}
+        pool = Pool()
+        Work = pool.get('project.work')
+        for name in Work._get_summary_fields():
+            res[name] = {}
+
+        limit_date = Transaction().context.get('limit_date')
+        for line in lines:
+            if line.type != 'line':
+                continue
+            if limit_date != None and line.purchase.purchase_date > limit_date:
+                res['progress_cost'][line.id] = Decimal(0)
+            else:
+                res['progress_cost'][line.id] = line.amount
+
+            res['revenue'][line.id] = Decimal(0)
+            res['progress_revenue'][line.id] = Decimal(0)
+            res['cost'][line.id] = Decimal(0)
+
+        for key in res.keys():
+            if key not in names:
+                del res[key]
+        return res
