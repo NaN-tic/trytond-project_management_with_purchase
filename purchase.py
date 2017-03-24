@@ -59,10 +59,16 @@ class PurchaseLine:
         for line in lines:
             if line.type != 'line':
                 continue
+
+            res['progress_cost'][line.id] = Decimal(0)
             if limit_date != None and line.purchase.purchase_date > limit_date:
                 res['progress_cost'][line.id] = Decimal(0)
-            else:
+            elif (line.purchase.state in ('processing') and
+                    line.purchase.shipment_state != 'received'):
                 res['progress_cost'][line.id] = line.amount
+            elif line.purchase.state in ('done'):
+                res['progress_cost'][line.id] = \
+                    line._get_shipped_quantity() * line.unit_price
 
             res['revenue'][line.id] = Decimal(0)
             res['progress_revenue'][line.id] = Decimal(0)
