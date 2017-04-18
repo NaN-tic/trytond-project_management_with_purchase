@@ -66,9 +66,17 @@ class PurchaseLine:
             elif (line.purchase.state in ('processing') and
                     line.purchase.shipment_state != 'received'):
                 res['progress_cost'][line.id] = line.amount
+                res['invoiced_cost'][line.id] = sum(
+                    x.amount for x in line.invoice_lines if x.invoice)
             elif line.purchase.state in ('done'):
                 res['progress_cost'][line.id] = \
                     line._get_shipped_quantity() * line.unit_price
+                res['invoiced_cost'][line.id] = sum(
+                    x.amount for x in line.invoice_lines if x.invoice)
+
+            if line.purchase.invoice_state != 'none':
+                res['invoiced_cost'][line.id] = sum(
+                    x.amount for x in line.invoice_lines if x.invoice)
 
             res['revenue'][line.id] = Decimal(0)
             res['progress_revenue'][line.id] = Decimal(0)
@@ -77,4 +85,5 @@ class PurchaseLine:
         for key in res.keys():
             if key not in names:
                 del res[key]
+
         return res
